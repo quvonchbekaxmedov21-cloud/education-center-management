@@ -49,10 +49,11 @@ export const courseService = {
   },
 
   async create(input: CourseCreateInput): Promise<void> {
+    const { price: _price, level: _level, ...safeInput } = input;
     const { error } = await supabase.from(TABLE).insert([
       {
-        ...input,
-        instructor_id: input.instructor_id || null,
+        ...safeInput,
+        instructor_id: safeInput.instructor_id || null,
         enrolled: 0,
       },
     ]);
@@ -62,6 +63,7 @@ export const courseService = {
 
   async update(input: CourseUpdateInput): Promise<void> {
     const { id, ...payload } = input;
+    const { price: _price, level: _level, ...safePayload } = payload;
 
     const { data: existing, error: readError } = await supabase
       .from(TABLE)
@@ -74,8 +76,8 @@ export const courseService = {
     const { error } = await supabase
       .from(TABLE)
       .update({
-        ...payload,
-        instructor_id: payload.instructor_id || null,
+        ...safePayload,
+        instructor_id: safePayload.instructor_id || null,
         enrolled: Number(existing?.enrolled || 0),
       })
       .eq('id', id);

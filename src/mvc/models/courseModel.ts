@@ -11,7 +11,7 @@ export interface CourseRecordView {
   duration?: string | null;
   capacity: number;
   enrolled: number;
-  price: number;
+  price?: number;
   status: CourseStatus;
   level?: string | null;
   start_date?: string | null;
@@ -25,7 +25,7 @@ export interface CourseCreateInput {
   schedule?: string | null;
   duration?: string | null;
   capacity: number;
-  price: number;
+  price?: number;
   status: CourseStatus;
   level?: string | null;
 }

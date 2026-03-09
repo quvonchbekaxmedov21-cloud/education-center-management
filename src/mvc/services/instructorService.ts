@@ -19,11 +19,11 @@ export const instructorService = {
   },
 
   async create(input: InstructorCreateInput): Promise<void> {
+    const { hourly_rate: _hourlyRate, ...safeInput } = input;
     const payload = {
-      ...input,
-      specialization: input.specialization || [],
+      ...safeInput,
+      specialization: safeInput.specialization || [],
       courses: [],
-      hourly_rate: input.hourly_rate || 0,
     };
 
     const { error } = await supabase.from(TABLE).insert([payload]);
@@ -32,13 +32,13 @@ export const instructorService = {
 
   async update(input: InstructorUpdateInput): Promise<void> {
     const { id, ...payload } = input;
+    const { hourly_rate: _hourlyRate, ...safePayload } = payload;
 
     const { error } = await supabase
       .from(TABLE)
       .update({
-        ...payload,
-        specialization: payload.specialization || [],
-        hourly_rate: payload.hourly_rate || 0,
+        ...safePayload,
+        specialization: safePayload.specialization || [],
       })
       .eq('id', id);
 

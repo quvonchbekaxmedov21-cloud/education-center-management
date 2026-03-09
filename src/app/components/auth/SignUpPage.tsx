@@ -9,7 +9,7 @@ import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
-import { CheckCircle2, GraduationCap, Loader2, Sparkles } from 'lucide-react';
+import { GraduationCap, Loader2, Sparkles } from 'lucide-react';
 
 export function SignUpPage() {
   const navigate = useNavigate();
@@ -87,24 +87,42 @@ export function SignUpPage() {
               <div className="relative space-y-5">
                 <div className="flex items-center gap-2 text-emerald-800 font-semibold">
                   <Sparkles className="size-4" />
-                  Account Approval Animation
+                  Identity Wave
                 </div>
 
                 <div className="rounded-xl bg-slate-900 px-4 py-5 overflow-hidden">
                   <div className="relative h-24">
                     <motion.div
-                      className="absolute left-2 top-6 h-12 w-12 rounded-full bg-gradient-to-br from-amber-300 to-orange-400"
-                      animate={{ y: [0, -6, 0], rotate: [0, 3, 0, -3, 0] }}
-                      transition={{ duration: 2.2, repeat: Infinity }}
+                      className="absolute left-6 top-5 h-14 w-14 rounded-xl border border-emerald-300/60"
+                      animate={{ rotate: [0, 12, 0], scale: [0.95, 1.08, 0.95], opacity: [0.45, 1, 0.45] }}
+                      transition={{ duration: 2.4, repeat: Infinity }}
                     />
                     <motion.div
-                      className="absolute right-4 top-3 rounded-full bg-emerald-400/25 p-3"
-                      animate={{ scale: [0.8, 1.15, 0.8], opacity: [0.45, 1, 0.45] }}
-                      transition={{ duration: 1.8, repeat: Infinity }}
-                    >
-                      <CheckCircle2 className="size-7 text-emerald-200" />
-                    </motion.div>
-                    <div className="absolute bottom-6 left-0 right-0 h-1 bg-gradient-to-r from-emerald-300 to-cyan-400" />
+                      className="absolute right-6 top-4 h-11 w-11 rounded-full bg-gradient-to-br from-emerald-300 to-cyan-400"
+                      animate={{ y: [0, 6, 0], scale: [0.8, 1.05, 0.8] }}
+                      transition={{ duration: 1.7, repeat: Infinity }}
+                    />
+                    <div className="absolute left-0 right-0 bottom-5 px-2">
+                      <svg viewBox="0 0 320 48" className="h-8 w-full" role="img" aria-label="animated signal wave">
+                        <motion.path
+                          d="M0,24 C30,6 60,42 90,24 C120,6 150,42 180,24 C210,6 240,42 270,24 C290,12 305,18 320,24"
+                          fill="none"
+                          stroke="url(#waveGradient)"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          initial={{ pathLength: 0.2, opacity: 0.4 }}
+                          animate={{ pathLength: [0.2, 1, 0.2], opacity: [0.4, 1, 0.4] }}
+                          transition={{ duration: 2.4, repeat: Infinity }}
+                        />
+                        <defs>
+                          <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#86efac" />
+                            <stop offset="50%" stopColor="#22d3ee" />
+                            <stop offset="100%" stopColor="#34d399" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    </div>
                   </div>
                 </div>
 

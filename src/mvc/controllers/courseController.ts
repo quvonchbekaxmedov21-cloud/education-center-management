@@ -9,7 +9,7 @@ function validate(input: CourseCreateInput): void {
   if (!input.name?.trim()) throw new Error('Course name is required');
   if (!input.code?.trim()) throw new Error('Course code is required');
   if (!input.capacity || input.capacity <= 0) throw new Error('Capacity must be greater than zero');
-  if (input.price < 0) throw new Error('Price cannot be negative');
+  if (input.price != null && input.price < 0) throw new Error('Price cannot be negative');
 }
 
 export const courseController = {

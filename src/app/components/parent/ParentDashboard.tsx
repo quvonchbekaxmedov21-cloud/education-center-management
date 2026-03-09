@@ -29,14 +29,27 @@ export function ParentDashboard() {
     if (!user) return;
 
     try {
-      // For this demo, we'll find students that have the parent's email in parent_email field
-      // In production, you'd use the parent_student relationship table
-      const { data: studentsData, error: studentsError } = await supabase
+      // Prefer relation table in production; fallback matching avoids strict dependency on parent_email column.
+      let studentsData: any[] | null = null;
+
+      const byName = await supabase
         .from('students')
         .select('*')
-        .eq('parent_email', user.email);
+        .eq('parent_name', user.full_name);
 
-      if (studentsError) throw studentsError;
+      if (!byName.error && byName.data && byName.data.length > 0) {
+        studentsData = byName.data;
+      } else if (user.phone) {
+        const byPhone = await supabase
+          .from('students')
+          .select('*')
+          .eq('parent_phone', user.phone);
+
+        if (byPhone.error) throw byPhone.error;
+        studentsData = byPhone.data;
+      } else {
+        studentsData = [];
+      }
 
       if (!studentsData || studentsData.length === 0) {
         // If no children found, show message

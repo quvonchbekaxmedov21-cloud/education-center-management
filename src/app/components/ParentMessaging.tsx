@@ -11,6 +11,29 @@ import type { MessageChannel, ParentRecipientView, SentMessageView } from '../..
 import { useAuth } from '../../lib/AuthContext';
 import { toast } from 'sonner';
 
+const MESSAGE_TEMPLATES: Array<{ title: string; body: string; channel: MessageChannel }> = [
+  {
+    title: 'Progress Update',
+    channel: 'email',
+    body: "Dear Parent, your child has shown strong progress this week. Please keep encouraging daily practice at home.",
+  },
+  {
+    title: 'Payment Reminder',
+    channel: 'email',
+    body: 'Dear Parent, this is a reminder that this month\'s fee payment is pending. Please contact us if you need assistance.',
+  },
+  {
+    title: 'Attendance Alert',
+    channel: 'sms',
+    body: 'Your child was absent today. Please contact the center if support is needed.',
+  },
+  {
+    title: 'Meeting Invitation',
+    channel: 'email',
+    body: 'Dear Parent, we would like to schedule a parent-teacher meeting this week. Please reply with your preferred time.',
+  },
+];
+
 export function ParentMessaging() {
   const { user } = useAuth();
   const [recipients, setRecipients] = useState<ParentRecipientView[]>([]);
@@ -76,6 +99,12 @@ export function ParentMessaging() {
     } catch (error: any) {
       toast.error(error.message || 'Failed to send message');
     }
+  };
+
+  const applyTemplate = (template: { title: string; body: string; channel: MessageChannel }) => {
+    setMessageType(template.channel);
+    setMessage(template.body);
+    toast.success(`${template.title} template applied`);
   };
 
   return (
@@ -225,6 +254,29 @@ export function ParentMessaging() {
             {!loading && recentMessages.length === 0 && (
               <div className="py-8 text-center text-slate-500">No message history yet.</div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ready-Made Templates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {MESSAGE_TEMPLATES.map((template) => (
+              <Button
+                key={template.title}
+                variant="outline"
+                className="h-auto py-4 px-4 text-left justify-start"
+                onClick={() => applyTemplate(template)}
+              >
+                <div>
+                  <div className="font-medium mb-1">{template.title}</div>
+                  <div className="text-xs text-slate-600">Channel: {template.channel.toUpperCase()}</div>
+                </div>
+              </Button>
+            ))}
           </div>
         </CardContent>
       </Card>

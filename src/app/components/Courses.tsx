@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Edit, Trash2, Users, Clock, DollarSign } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Users, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -69,9 +69,7 @@ export function Courses() {
       schedule: (formData.get('schedule') as string) || null,
       duration: (formData.get('duration') as string) || null,
       capacity: Number(formData.get('capacity')),
-      price: Number(formData.get('price')),
       status: formData.get('status') as CourseStatus,
-      level: (formData.get('level') as string) || null,
     };
 
     try {
@@ -94,6 +92,27 @@ export function Courses() {
 
   const CourseForm = ({ course }: { course?: CourseRecordView | null }) => (
     <form onSubmit={handleSave} className="space-y-4">
+      <CourseFormFields course={course} />
+    </form>
+  );
+
+  const CourseFormFields = ({ course }: { course?: CourseRecordView | null }) => {
+    const [selectedInstructorId, setSelectedInstructorId] = useState<string>(course?.instructor_id || 'unassigned');
+    const [selectedStatus, setSelectedStatus] = useState<CourseStatus>(course?.status || 'active');
+
+    useEffect(() => {
+      setSelectedInstructorId(course?.instructor_id || 'unassigned');
+      setSelectedStatus(course?.status || 'active');
+    }, [course]);
+
+    return (
+      <>
+      <input
+        type="hidden"
+        name="instructor_id"
+        value={selectedInstructorId === 'unassigned' ? '' : selectedInstructorId}
+      />
+      <input type="hidden" name="status" value={selectedStatus} />
       <div>
         <Label htmlFor="name">Course Name</Label>
         <Input id="name" name="name" defaultValue={course?.name} required />
@@ -104,11 +123,12 @@ export function Courses() {
       </div>
       <div>
         <Label htmlFor="instructor_id">Instructor</Label>
-        <Select name="instructor_id" defaultValue={course?.instructor_id || undefined}>
+        <Select value={selectedInstructorId} onValueChange={setSelectedInstructorId}>
           <SelectTrigger>
             <SelectValue placeholder="Select instructor" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
             {instructors.map((instructor) => (
               <SelectItem key={instructor.id} value={instructor.id}>
                 {instructor.name} {instructor.surname}
@@ -121,27 +141,17 @@ export function Courses() {
         <Label htmlFor="schedule">Schedule</Label>
         <Input id="schedule" name="schedule" defaultValue={course?.schedule || ''} placeholder="e.g., Mon, Wed 10:00 AM" />
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="capacity">Capacity</Label>
-          <Input id="capacity" name="capacity" type="number" defaultValue={course?.capacity} required />
-        </div>
-        <div>
-          <Label htmlFor="price">Price ($)</Label>
-          <Input id="price" name="price" type="number" defaultValue={course?.price} required />
-        </div>
+      <div>
+        <Label htmlFor="capacity">Capacity</Label>
+        <Input id="capacity" name="capacity" type="number" defaultValue={course?.capacity} required />
       </div>
       <div>
         <Label htmlFor="duration">Duration</Label>
         <Input id="duration" name="duration" defaultValue={course?.duration} placeholder="e.g., 12 weeks" required />
       </div>
       <div>
-        <Label htmlFor="level">Level</Label>
-        <Input id="level" name="level" defaultValue={course?.level || ''} placeholder="beginner/intermediate/advanced" />
-      </div>
-      <div>
         <Label htmlFor="status">Status</Label>
-        <Select name="status" defaultValue={course?.status || 'active'}>
+        <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as CourseStatus)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -163,8 +173,9 @@ export function Courses() {
           {course ? 'Update' : 'Add'} Course
         </Button>
       </div>
-    </form>
-  );
+      </>
+    );
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -181,6 +192,9 @@ export function Courses() {
         <div>
           <h2 className="text-2xl font-semibold">Courses</h2>
           <p className="text-slate-600 mt-1">Manage course offerings and schedules</p>
+          <p className="text-xs text-slate-500 mt-2">
+            Enrollment flow: admins assign students to courses (students do not self-enroll).
+          </p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
@@ -242,8 +256,7 @@ export function Courses() {
                         <span>{course.schedule || 'Schedule TBA'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <DollarSign className="size-4" />
-                        <span>${course.price} • {course.duration}</span>
+                        <span>{course.duration}</span>
                       </div>
                     </div>
 

@@ -180,6 +180,9 @@ export function Students() {
         <div>
           <h2 className="text-2xl font-semibold">Students</h2>
           <p className="text-slate-600 mt-1">Manage student records and enrollments</p>
+          <p className="text-xs text-slate-500 mt-2">
+            Enrollment policy: admins assign students to courses (students do not self-enroll).
+          </p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>

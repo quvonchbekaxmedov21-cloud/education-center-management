@@ -92,6 +92,22 @@ export function Instructors() {
 
   const InstructorForm = ({ instructor }: { instructor?: InstructorModel | null }) => (
     <form onSubmit={handleSave} className="space-y-4">
+      <InstructorFormFields instructor={instructor} />
+    </form>
+  );
+
+  const InstructorFormFields = ({ instructor }: { instructor?: InstructorModel | null }) => {
+    const [selectedStatus, setSelectedStatus] = useState<'active' | 'inactive' | 'on_leave'>(
+      instructor?.status || 'active'
+    );
+
+    useEffect(() => {
+      setSelectedStatus(instructor?.status || 'active');
+    }, [instructor]);
+
+    return (
+      <>
+      <input type="hidden" name="status" value={selectedStatus} />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="name">First Name</Label>
@@ -131,7 +147,7 @@ export function Instructors() {
       </div>
       <div>
         <Label htmlFor="status">Status</Label>
-        <Select name="status" defaultValue={instructor?.status || 'active'}>
+        <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as 'active' | 'inactive' | 'on_leave')}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -153,8 +169,9 @@ export function Instructors() {
           {instructor ? 'Update' : 'Add'} Instructor
         </Button>
       </div>
-    </form>
-  );
+      </>
+    );
+  };
 
   return (
     <div className="space-y-6">

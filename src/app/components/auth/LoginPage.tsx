@@ -8,7 +8,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { toast } from 'sonner';
-import { CheckCircle2, GraduationCap, Loader2, Sparkles } from 'lucide-react';
+import { GraduationCap, Loader2 } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -81,28 +81,38 @@ export function LoginPage() {
             <div className="relative overflow-hidden rounded-2xl border border-cyan-200/70 bg-white/80 backdrop-blur p-6 shadow-xl">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(6,182,212,0.15),transparent_35%),radial-gradient(circle_at_85%_78%,rgba(249,115,22,0.16),transparent_38%)]" />
               <div className="relative space-y-5">
-                <div className="flex items-center gap-2 text-cyan-800 font-semibold">
-                  <Sparkles className="size-4" />
-                  Live Journey Animation
-                </div>
-
                 <div className="rounded-xl bg-slate-900 px-4 py-5 overflow-hidden">
                   <div className="relative h-24">
-                    <div className="absolute bottom-7 left-0 right-0 h-1 bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400" />
                     <motion.div
-                      className="absolute bottom-9 left-0 h-10 w-20 rounded-md bg-gradient-to-r from-cyan-400 to-blue-500 shadow-lg"
-                      animate={{ x: ['-5%', '95%'] }}
-                      transition={{ duration: 5, ease: 'linear', repeat: Infinity }}
-                    >
-                      <div className="absolute inset-1 rounded bg-slate-950/40" />
-                    </motion.div>
+                      className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/70"
+                      animate={{ scale: [1, 1.25, 1], opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 2.2, repeat: Infinity }}
+                    />
                     <motion.div
-                      className="absolute right-4 top-2 rounded-full bg-emerald-400/25 p-3"
-                      animate={{ scale: [0.9, 1.15, 0.9], opacity: [0.4, 1, 0.4] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      <CheckCircle2 className="size-6 text-emerald-200" />
-                    </motion.div>
+                      className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-cyan-300 to-blue-500"
+                      animate={{ scale: [0.9, 1.1, 0.9] }}
+                      transition={{ duration: 1.6, repeat: Infinity }}
+                    />
+                    <motion.div
+                      className="absolute left-[20%] top-[25%] h-2 w-2 rounded-full bg-cyan-300"
+                      animate={{ x: [0, 12, 0], y: [0, -8, 0], opacity: [0.4, 1, 0.4] }}
+                      transition={{ duration: 2.4, repeat: Infinity }}
+                    />
+                    <motion.div
+                      className="absolute right-[22%] bottom-[24%] h-2.5 w-2.5 rounded-full bg-amber-300"
+                      animate={{ x: [0, -10, 0], y: [0, 8, 0], opacity: [0.4, 1, 0.4] }}
+                      transition={{ duration: 2.1, repeat: Infinity }}
+                    />
+                    <div className="absolute bottom-4 left-0 right-0 grid grid-cols-5 gap-2 px-3">
+                      {[0, 1, 2, 3, 4].map((index) => (
+                        <motion.div
+                          key={index}
+                          className="h-1.5 rounded-full bg-gradient-to-r from-cyan-300 to-blue-400"
+                          animate={{ opacity: [0.25, 1, 0.25], scaleX: [0.85, 1, 0.85] }}
+                          transition={{ duration: 1.6, repeat: Infinity, delay: index * 0.12 }}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
 

@@ -9,7 +9,7 @@ export const messagingService = {
   async listParentRecipients(): Promise<ParentRecipientView[]> {
     const { data, error } = await supabase
       .from('students')
-      .select('id, name, surname, parent_name, parent_email, parent_phone')
+      .select('id, name, surname, parent_name, parent_phone')
       .order('name');
 
     if (error) throw new Error(error.message);
@@ -18,7 +18,7 @@ export const messagingService = {
       student_id: row.id,
       student_name: `${row.name} ${row.surname}`,
       parent_name: row.parent_name || 'Parent',
-      parent_email: row.parent_email,
+      parent_email: null,
       parent_phone: row.parent_phone,
     }));
   },
@@ -26,7 +26,7 @@ export const messagingService = {
   async listRecentSent(limit = 10): Promise<SentMessageView[]> {
     const { data, error } = await supabase
       .from('messages')
-      .select('id, sent_date, subject, message')
+      .select('id, sent_date, message')
       .order('sent_date', { ascending: false })
       .limit(limit);
 
@@ -35,9 +35,9 @@ export const messagingService = {
     return (data || []).map((row: any) => ({
       id: row.id,
       sent_date: row.sent_date,
-      channel: row.subject?.includes('[SMS]') ? 'sms' : 'email',
-      recipient: row.subject?.split('to: ')[1] || 'Parent',
-      subject: row.subject,
+      channel: 'email',
+      recipient: 'Parent',
+      subject: null,
       message: row.message,
     }));
   },
@@ -55,7 +55,6 @@ export const messagingService = {
     const rows = selectedRecipients.map((recipient) => ({
       from_user_id: senderUser?.id || null,
       to_user_id: null,
-      subject: `[${input.channel.toUpperCase()}] to: ${recipient.parent_name} (${recipient.student_name})`,
       message: input.body,
       status: 'sent',
     }));
