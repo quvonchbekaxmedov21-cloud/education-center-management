@@ -1,62 +1,96 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Search, Edit, Trash2, Mail, Phone, Star, BookOpen } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
-import { mockInstructors, type Instructor } from '../lib/mockData';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { instructorController } from '../../mvc/controllers/instructorController';
+import type { InstructorCreateInput, InstructorModel, InstructorUpdateInput } from '../../mvc/models/instructorModel';
 import { toast } from 'sonner';
 
 export function Instructors() {
-  const [instructors, setInstructors] = useState<Instructor[]>(mockInstructors);
+  const [instructors, setInstructors] = useState<InstructorModel[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingInstructor, setEditingInstructor] = useState<Instructor | null>(null);
+  const [editingInstructor, setEditingInstructor] = useState<InstructorModel | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const filteredInstructors = instructors.filter(instructor =>
-    instructor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    instructor.specialty.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    void fetchInstructors();
+  }, []);
 
-  const handleDelete = (id: string) => {
-    setInstructors(instructors.filter(i => i.id !== id));
-    toast.success('Instructor deleted successfully');
+  const fetchInstructors = async () => {
+    try {
+      const data = await instructorController.listInstructors();
+      setInstructors(data);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load instructors');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+  const filteredInstructors = instructors.filter(instructor =>
+    `${instructor.name} ${instructor.surname}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    instructor.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (instructor.specialization || []).join(', ').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleDelete = async (id: string) => {
+    try {
+      await instructorController.deleteInstructor(id);
+      setInstructors(instructors.filter(i => i.id !== id));
+      toast.success('Instructor deleted successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete instructor');
+    }
+  };
+
+  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    
-    const instructorData: Instructor = {
-      id: editingInstructor?.id || String(Date.now()),
+
+    const specializationRaw = (formData.get('specialization') as string) || '';
+    const specialization = specializationRaw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const instructorData: InstructorCreateInput = {
       name: formData.get('name') as string,
       surname: formData.get('surname') as string,
       email: formData.get('email') as string,
-      phone: formData.get('phone') as string,
-      specialty: formData.get('specialty') as string,
-      experience: formData.get('experience') as string,
-      rating: Number(formData.get('rating')),
-      courses: editingInstructor?.courses || [],
-      groups: editingInstructor?.groups || [],
-      salary: Number(formData.get('salary')) || 0,
-      salaryStatus: editingInstructor?.salaryStatus || 'pending',
-      lastPaymentDate: editingInstructor?.lastPaymentDate
+      phone: (formData.get('phone') as string) || null,
+      specialization,
+      status: formData.get('status') as 'active' | 'inactive' | 'on_leave',
+      join_date: formData.get('join_date') as string,
+      hourly_rate: Number(formData.get('hourly_rate')) || 0,
     };
 
-    if (editingInstructor) {
-      setInstructors(instructors.map(i => i.id === editingInstructor.id ? instructorData : i));
-      toast.success('Instructor updated successfully');
-    } else {
-      setInstructors([...instructors, instructorData]);
-      toast.success('Instructor added successfully');
-    }
+    try {
+      if (editingInstructor) {
+        const updatePayload: InstructorUpdateInput = {
+          ...instructorData,
+          id: editingInstructor.id,
+        };
+        await instructorController.updateInstructor(updatePayload);
+        toast.success('Instructor updated successfully');
+      } else {
+        await instructorController.createInstructor(instructorData);
+        toast.success('Instructor added successfully');
+      }
 
-    setIsAddDialogOpen(false);
-    setEditingInstructor(null);
+      await fetchInstructors();
+      setIsAddDialogOpen(false);
+      setEditingInstructor(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save instructor');
+    }
   };
 
-  const InstructorForm = ({ instructor }: { instructor?: Instructor | null }) => (
+  const InstructorForm = ({ instructor }: { instructor?: InstructorModel | null }) => (
     <form onSubmit={handleSave} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -77,22 +111,36 @@ export function Instructors() {
         <Input id="phone" name="phone" defaultValue={instructor?.phone} required />
       </div>
       <div>
-        <Label htmlFor="specialty">Specialty</Label>
-        <Input id="specialty" name="specialty" defaultValue={instructor?.specialty} required />
+        <Label htmlFor="specialization">Specialization</Label>
+        <Input
+          id="specialization"
+          name="specialization"
+          defaultValue={(instructor?.specialization || []).join(', ')}
+          placeholder="English, IELTS, SAT"
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="experience">Experience</Label>
-          <Input id="experience" name="experience" defaultValue={instructor?.experience} placeholder="e.g., 10 years" required />
+          <Label htmlFor="join_date">Join Date</Label>
+          <Input id="join_date" name="join_date" type="date" defaultValue={instructor?.join_date} required />
         </div>
         <div>
-          <Label htmlFor="rating">Rating (0-5)</Label>
-          <Input id="rating" name="rating" type="number" step="0.1" min="0" max="5" defaultValue={instructor?.rating} required />
+          <Label htmlFor="hourly_rate">Hourly Rate ($)</Label>
+          <Input id="hourly_rate" name="hourly_rate" type="number" defaultValue={instructor?.hourly_rate || 0} />
         </div>
       </div>
       <div>
-        <Label htmlFor="salary">Monthly Salary ($)</Label>
-        <Input id="salary" name="salary" type="number" defaultValue={instructor?.salary} required />
+        <Label htmlFor="status">Status</Label>
+        <Select name="status" defaultValue={instructor?.status || 'active'}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="on_leave">On Leave</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex justify-end gap-3 pt-4">
         <Button type="button" variant="outline" onClick={() => {
@@ -146,6 +194,9 @@ export function Instructors() {
           </div>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="py-12 text-center text-slate-500">Loading instructors...</div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredInstructors.map((instructor) => (
               <Card key={instructor.id} className="hover:shadow-md transition-shadow">
@@ -156,7 +207,7 @@ export function Instructors() {
                     </div>
                     <div>
                       <h3 className="font-semibold">{instructor.name} {instructor.surname}</h3>
-                      <p className="text-sm text-slate-600">{instructor.specialty}</p>
+                      <p className="text-sm text-slate-600">{(instructor.specialization || []).join(', ') || 'General'}</p>
                     </div>
                   </div>
 
@@ -171,18 +222,18 @@ export function Instructors() {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-600">
                       <BookOpen className="size-4 flex-shrink-0" />
-                      <span>{instructor.courses.length} courses</span>
+                      <span>{(instructor.courses || []).length} courses</span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between mb-4 pb-4 border-b">
                     <div className="text-sm">
-                      <span className="text-slate-600">Experience:</span>
-                      <span className="ml-2 font-medium">{instructor.experience}</span>
+                      <span className="text-slate-600">Status:</span>
+                      <span className="ml-2 font-medium capitalize">{instructor.status.replace('_', ' ')}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Star className="size-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-medium">{instructor.rating}</span>
+                      <span className="font-medium">${Number(instructor.hourly_rate || 0).toFixed(2)}/hr</span>
                     </div>
                   </div>
 
@@ -218,6 +269,7 @@ export function Instructors() {
               </Card>
             ))}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

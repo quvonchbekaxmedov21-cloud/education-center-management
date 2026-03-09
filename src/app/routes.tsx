@@ -93,10 +93,12 @@ export const router = createBrowserRouter([
       { index: true, Component: StudentDashboard },
       { path: "courses", Component: MyCourses },
       { path: "grades", Component: MyGrades },
+      { path: "materials", Component: Materials },
+      { path: "quick-links", Component: QuickLinks },
       // Placeholders for other student pages
       { 
         path: "homework", 
-        element: <div className="text-center py-12"><h2 className="text-2xl font-bold">My Homework</h2><p className="text-gray-600 mt-2">View and submit your homework assignments</p></div>
+        Component: HomeworkPage,
       },
       { 
         path: "attendance", 
@@ -134,11 +136,11 @@ export const router = createBrowserRouter([
       },
       { 
         path: "students", 
-        element: <div className="text-center py-12"><h2 className="text-2xl font-bold">My Students</h2><p className="text-gray-600 mt-2">View all your students</p></div>
+        Component: Students,
       },
       { 
         path: "attendance", 
-        element: <div className="text-center py-12"><h2 className="text-2xl font-bold">Mark Attendance</h2><p className="text-gray-600 mt-2">Take attendance for your classes</p></div>
+        Component: Attendance,
       },
       { 
         path: "grading", 
@@ -146,7 +148,11 @@ export const router = createBrowserRouter([
       },
       { 
         path: "homework", 
-        element: <div className="text-center py-12"><h2 className="text-2xl font-bold">Homework Management</h2><p className="text-gray-600 mt-2">Assign and grade homework</p></div>
+        Component: HomeworkPage,
+      },
+      {
+        path: "quick-links",
+        Component: QuickLinks,
       },
       { 
         path: "salary", 
@@ -189,6 +195,10 @@ export const router = createBrowserRouter([
       { 
         path: "payments", 
         element: <div className="text-center py-12"><h2 className="text-2xl font-bold">Payments</h2><p className="text-gray-600 mt-2">Manage fee payments</p></div>
+      },
+      {
+        path: "quick-links",
+        Component: QuickLinks,
       },
       { 
         path: "messages", 

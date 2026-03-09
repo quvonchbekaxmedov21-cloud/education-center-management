@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DollarSign, Search, Plus, CreditCard, Banknote, ArrowRightLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -7,52 +7,94 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
-import { mockPayments, mockStudents, type Payment } from '../lib/mockData';
+import { paymentController } from '../../mvc/controllers/paymentController';
+import type { PaymentCreateInput, PaymentRecordView } from '../../mvc/models/paymentModel';
 import { toast } from 'sonner';
 
 export function Payments() {
-  const [payments, setPayments] = useState<Payment[]>(mockPayments);
+  const [payments, setPayments] = useState<PaymentRecordView[]>([]);
+  const [students, setStudents] = useState<Array<{ id: string; name: string; surname: string; email: string }>>([]);
+  const [courses, setCourses] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [paymentData, studentData, courseData] = await Promise.all([
+        paymentController.listPayments(),
+        paymentController.listStudents(),
+        paymentController.listCourses(),
+      ]);
+      setPayments(paymentData);
+      setStudents(studentData as Array<{ id: string; name: string; surname: string; email: string }>);
+      setCourses(courseData as Array<{ id: string; name: string; code?: string }>);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load payments');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredPayments = payments.filter(payment =>
-    payment.studentName.toLowerCase().includes(searchQuery.toLowerCase())
+    payment.student_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    
-    const studentId = formData.get('studentId') as string;
-    const student = mockStudents.find(s => s.id === studentId);
 
-    const paymentData: Payment = {
-      id: String(Date.now()),
-      studentId,
-      studentName: `${student?.name} ${student?.surname}`,
+    const paymentData: PaymentCreateInput = {
+      student_id: formData.get('studentId') as string,
+      course_id: (formData.get('courseId') as string) || null,
       amount: Number(formData.get('amount')),
-      date: formData.get('date') as string,
-      status: formData.get('status') as 'completed' | 'pending' | 'failed',
-      method: formData.get('method') as 'cash' | 'card' | 'transfer',
+      due_date: formData.get('dueDate') as string,
+      paid_date: (formData.get('paidDate') as string) || null,
+      status: formData.get('status') as 'pending' | 'paid' | 'overdue' | 'cancelled',
+      payment_method: formData.get('method') as string,
       notes: formData.get('notes') as string
     };
 
-    setPayments([...payments, paymentData]);
-    toast.success('Payment recorded successfully');
-    setIsAddDialogOpen(false);
+    try {
+      await paymentController.createPayment(paymentData);
+      toast.success('Payment recorded successfully');
+      await loadData();
+      setIsAddDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to record payment');
+    }
   };
 
   const stats = {
-    total: payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + p.amount, 0),
+    total: payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0),
     pending: payments.filter(p => p.status === 'pending').length,
     thisMonth: payments.filter(p => {
-      const paymentDate = new Date(p.date);
+      const paymentDate = new Date(p.paid_date || p.due_date);
       const now = new Date();
       return paymentDate.getMonth() === now.getMonth() && paymentDate.getFullYear() === now.getFullYear();
     }).reduce((sum, p) => sum + p.amount, 0)
   };
 
-  const studentsWithBalance = mockStudents.filter(s => s.balance > 0);
+  const studentBalanceMap = new Map<string, { studentName: string; email: string; amount: number; status: string }>();
+  payments
+    .filter((p) => p.status === 'pending' || p.status === 'overdue')
+    .forEach((p) => {
+      const existing = studentBalanceMap.get(p.student_id);
+      const amount = (existing?.amount || 0) + p.amount;
+      const status = existing?.status === 'overdue' || p.status === 'overdue' ? 'overdue' : 'pending';
+      const student = students.find((s) => s.id === p.student_id);
+      studentBalanceMap.set(p.student_id, {
+        studentName: p.student_name,
+        email: student?.email || '',
+        amount,
+        status,
+      });
+    });
+  const studentsWithBalance = Array.from(studentBalanceMap.entries()).map(([id, value]) => ({ id, ...value }));
 
   return (
     <div className="space-y-6">
@@ -80,9 +122,24 @@ export function Payments() {
                     <SelectValue placeholder="Select student" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockStudents.map(student => (
+                    {students.map(student => (
                       <SelectItem key={student.id} value={student.id}>
-                        {student.name} {student.surname} {student.balance > 0 && `(${student.balance} due)`}
+                        {student.name} {student.surname}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="courseId">Course (Optional)</Label>
+                <Select name="courseId">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courses.map(course => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -93,8 +150,12 @@ export function Payments() {
                 <Input id="amount" name="amount" type="number" required />
               </div>
               <div>
-                <Label htmlFor="date">Date</Label>
-                <Input id="date" name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required />
+                <Label htmlFor="dueDate">Due Date</Label>
+                <Input id="dueDate" name="dueDate" type="date" defaultValue={new Date().toISOString().split('T')[0]} required />
+              </div>
+              <div>
+                <Label htmlFor="paidDate">Paid Date (Optional)</Label>
+                <Input id="paidDate" name="paidDate" type="date" />
               </div>
               <div>
                 <Label htmlFor="method">Payment Method</Label>
@@ -111,14 +172,15 @@ export function Payments() {
               </div>
               <div>
                 <Label htmlFor="status">Status</Label>
-                <Select name="status" defaultValue="completed">
+                <Select name="status" defaultValue="paid">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -183,23 +245,23 @@ export function Payments() {
               {studentsWithBalance.map(student => (
                 <div key={student.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div>
-                    <div className="font-medium">{student.name} {student.surname}</div>
+                    <div className="font-medium">{student.studentName}</div>
                     <div className="text-sm text-slate-600">{student.email}</div>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className={`px-3 py-1 rounded text-sm ${
-                      student.paymentStatus === 'overdue' 
+                      student.status === 'overdue' 
                         ? 'bg-red-100 text-red-700' 
                         : 'bg-yellow-100 text-yellow-700'
                     }`}>
-                      ${student.balance} due
+                      ${student.amount.toFixed(2)} due
                     </span>
                     <span className={`px-3 py-1 rounded text-sm ${
-                      student.paymentStatus === 'overdue' 
+                      student.status === 'overdue' 
                         ? 'bg-red-100 text-red-700' 
                         : 'bg-yellow-100 text-yellow-700'
                     }`}>
-                      {student.paymentStatus}
+                      {student.status}
                     </span>
                   </div>
                 </div>
@@ -229,28 +291,31 @@ export function Payments() {
           </div>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="py-12 text-center text-slate-500">Loading payment records...</div>
+          ) : (
           <div className="space-y-2">
             {filteredPayments.map(payment => (
               <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50">
                 <div className="flex items-center gap-4">
                   <div className={`p-2 rounded-lg ${
-                    payment.method === 'cash' ? 'bg-green-100' :
-                    payment.method === 'card' ? 'bg-blue-100' :
+                    payment.payment_method === 'cash' ? 'bg-green-100' :
+                    payment.payment_method === 'card' ? 'bg-blue-100' :
                     'bg-purple-100'
                   }`}>
-                    {payment.method === 'cash' ? <Banknote className="size-5" /> :
-                     payment.method === 'card' ? <CreditCard className="size-5" /> :
+                    {payment.payment_method === 'cash' ? <Banknote className="size-5" /> :
+                     payment.payment_method === 'card' ? <CreditCard className="size-5" /> :
                      <ArrowRightLeft className="size-5" />}
                   </div>
                   <div>
-                    <div className="font-medium">{payment.studentName}</div>
-                    <div className="text-sm text-slate-600">{payment.date} • {payment.method}</div>
+                    <div className="font-medium">{payment.student_name}</div>
+                    <div className="text-sm text-slate-600">Due: {payment.due_date} • {payment.payment_method || 'N/A'}</div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="font-semibold">${payment.amount}</div>
                   <span className={`text-sm px-2 py-1 rounded ${
-                    payment.status === 'completed' ? 'bg-green-100 text-green-700' :
+                    payment.status === 'paid' ? 'bg-green-100 text-green-700' :
                     payment.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
                     'bg-red-100 text-red-700'
                   }`}>
@@ -260,6 +325,7 @@ export function Payments() {
               </div>
             ))}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

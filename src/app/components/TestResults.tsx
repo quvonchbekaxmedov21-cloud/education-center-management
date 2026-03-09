@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, TrendingUp, Award } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Award } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
@@ -8,40 +8,66 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { mockTestResults, mockStudents, type TestResult } from '../lib/mockData';
+import { testResultController } from '../../mvc/controllers/testResultController';
+import type { TestResultCreateInput, TestResultRecordView } from '../../mvc/models/testResultModel';
 import { toast } from 'sonner';
 
 export function TestResults() {
-  const [results, setResults] = useState<TestResult[]>(mockTestResults);
+  const [results, setResults] = useState<TestResultRecordView[]>([]);
+  const [students, setStudents] = useState<Array<{ id: string; name: string; surname: string }>>([]);
+  const [courses, setCourses] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [resultData, studentData, courseData] = await Promise.all([
+        testResultController.listTestResults(),
+        testResultController.listStudents(),
+        testResultController.listCourses(),
+      ]);
+      setResults(resultData);
+      setStudents(studentData as Array<{ id: string; name: string; surname: string }>);
+      setCourses(courseData as Array<{ id: string; name: string; code?: string }>);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load test results');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredResults = selectedStudent === 'all'
     ? results
-    : results.filter(r => r.studentId === selectedStudent);
+    : results.filter((r) => r.student_id === selectedStudent);
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    
-    const studentId = formData.get('studentId') as string;
-    const student = mockStudents.find(s => s.id === studentId);
 
-    const resultData: TestResult = {
-      id: String(Date.now()),
-      studentId,
-      studentName: `${student?.name} ${student?.surname}`,
-      testType: formData.get('testType') as 'weekly' | 'monthly' | 'mock' | 'placement',
-      subject: formData.get('subject') as string,
+    const resultData: TestResultCreateInput = {
+      student_id: formData.get('student_id') as string,
+      course_id: formData.get('course_id') as string,
+      test_name: formData.get('test_name') as string,
+      test_type: formData.get('test_type') as 'weekly' | 'monthly' | 'mock' | 'placement',
       score: Number(formData.get('score')),
-      maxScore: Number(formData.get('maxScore')),
+      max_score: Number(formData.get('max_score')),
       date: formData.get('date') as string,
-      feedback: formData.get('feedback') as string
+      remarks: (formData.get('remarks') as string) || null,
     };
 
-    setResults([...results, resultData]);
-    toast.success('Test result added successfully');
-    setIsAddDialogOpen(false);
+    try {
+      await testResultController.createTestResult(resultData);
+      toast.success('Test result added successfully');
+      await loadData();
+      setIsAddDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add test result');
+    }
   };
 
   const getScoreColor = (percentage: number) => {
@@ -58,10 +84,10 @@ export function TestResults() {
     return 'bg-red-100';
   };
 
-  const studentPerformance = selectedStudent !== 'all' 
-    ? filteredResults.map(r => ({
+  const studentPerformance = selectedStudent !== 'all'
+    ? filteredResults.slice().reverse().map((r) => ({
         date: r.date,
-        percentage: Math.round((r.score / r.maxScore) * 100)
+        percentage: Math.round((r.score / r.max_score) * 100),
       }))
     : [];
 
@@ -85,13 +111,13 @@ export function TestResults() {
             </DialogHeader>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <Label htmlFor="studentId">Student</Label>
-                <Select name="studentId" required>
+                <Label htmlFor="student_id">Student</Label>
+                <Select name="student_id" required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select student" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockStudents.map(student => (
+                    {students.map((student) => (
                       <SelectItem key={student.id} value={student.id}>
                         {student.name} {student.surname}
                       </SelectItem>
@@ -100,8 +126,27 @@ export function TestResults() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="testType">Test Type</Label>
-                <Select name="testType" defaultValue="weekly">
+                <Label htmlFor="course_id">Course</Label>
+                <Select name="course_id" required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="test_name">Test Name</Label>
+                <Input id="test_name" name="test_name" placeholder="Midterm 1" required />
+              </div>
+              <div>
+                <Label htmlFor="test_type">Test Type</Label>
+                <Select name="test_type" defaultValue="weekly">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -113,18 +158,14 @@ export function TestResults() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="subject">Subject</Label>
-                <Input id="subject" name="subject" required />
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="score">Score</Label>
                   <Input id="score" name="score" type="number" required />
                 </div>
                 <div>
-                  <Label htmlFor="maxScore">Max Score</Label>
-                  <Input id="maxScore" name="maxScore" type="number" defaultValue="100" required />
+                  <Label htmlFor="max_score">Max Score</Label>
+                  <Input id="max_score" name="max_score" type="number" defaultValue="100" required />
                 </div>
               </div>
               <div>
@@ -132,8 +173,8 @@ export function TestResults() {
                 <Input id="date" name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required />
               </div>
               <div>
-                <Label htmlFor="feedback">Feedback (Optional)</Label>
-                <Textarea id="feedback" name="feedback" />
+                <Label htmlFor="remarks">Feedback (Optional)</Label>
+                <Textarea id="remarks" name="remarks" />
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -146,7 +187,7 @@ export function TestResults() {
         </Dialog>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button
           variant={selectedStudent === 'all' ? 'default' : 'outline'}
           size="sm"
@@ -154,7 +195,7 @@ export function TestResults() {
         >
           All Students
         </Button>
-        {mockStudents.slice(0, 5).map(student => (
+        {students.slice(0, 6).map((student) => (
           <Button
             key={student.id}
             variant={selectedStudent === student.id ? 'default' : 'outline'}
@@ -186,24 +227,26 @@ export function TestResults() {
       )}
 
       <div className="space-y-4">
-        {filteredResults.map(result => {
-          const percentage = Math.round((result.score / result.maxScore) * 100);
+        {loading && <Card><CardContent className="p-8 text-center text-slate-500">Loading test results...</CardContent></Card>}
+        {!loading && filteredResults.map((result) => {
+          const percentage = Math.round((result.score / result.max_score) * 100);
           return (
             <Card key={result.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold">{result.studentName}</h3>
+                      <h3 className="font-semibold">{result.student_name}</h3>
                       <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                        {result.testType}
+                        {result.test_type}
                       </span>
                     </div>
-                    <p className="text-slate-600 mb-2">{result.subject}</p>
-                    {result.feedback && (
+                    <p className="text-slate-600 mb-1">{result.course_name}</p>
+                    <p className="text-sm font-medium mb-2">{result.test_name}</p>
+                    {result.remarks && (
                       <div className="flex items-start gap-2 mt-3 p-3 bg-slate-50 rounded">
                         <Award className="size-4 text-slate-600 mt-0.5" />
-                        <p className="text-sm text-slate-600">{result.feedback}</p>
+                        <p className="text-sm text-slate-600">{result.remarks}</p>
                       </div>
                     )}
                   </div>
@@ -212,7 +255,7 @@ export function TestResults() {
                       {percentage}%
                     </div>
                     <div className="text-sm text-slate-600 mt-1">
-                      {result.score} / {result.maxScore}
+                      {result.score} / {result.max_score}
                     </div>
                     <div className={`mt-2 px-3 py-1 rounded text-sm ${getScoreBgColor(percentage)} ${getScoreColor(percentage)}`}>
                       {percentage >= 90 ? 'Excellent' :
@@ -228,6 +271,12 @@ export function TestResults() {
           );
         })}
       </div>
+
+      {!loading && filteredResults.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center text-slate-600">No test results found for this filter.</CardContent>
+        </Card>
+      )}
     </div>
   );
 }

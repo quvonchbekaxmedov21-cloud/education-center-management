@@ -1,3 +1,12 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+html {
+	scroll-behavior: smooth;
+}
+
+::selection {
+	background: #87d6ff;
+	color: #052034;
+}

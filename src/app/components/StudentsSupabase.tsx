@@ -6,16 +6,16 @@ import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { supabase, type Student as SupabaseStudent } from '../../lib/supabase';
+import { studentController } from '../../mvc/controllers/studentController';
+import type {
+  StudentCreateInput,
+  StudentModel,
+  StudentStatus,
+  StudentUpdateInput,
+} from '../../mvc/models/studentModel';
 import { toast } from 'sonner';
 
-// Extended Student interface for UI
-interface Student extends SupabaseStudent {
-  grade?: string;
-  discount?: number;
-  group_id?: string;
-  parent_email?: string;
-}
+type Student = StudentModel;
 
 export function Students() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -26,21 +26,16 @@ export function Students() {
 
   // Fetch students from Supabase
   useEffect(() => {
-    fetchStudents();
+    void fetchStudents();
   }, []);
 
   const fetchStudents = async () => {
     try {
-      const { data, error } = await supabase
-        .from('students')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setStudents(data || []);
-    } catch (error) {
+      const data = await studentController.listStudents();
+      setStudents(data);
+    } catch (error: any) {
       console.error('Error fetching students:', error);
-      toast.error('Failed to load students');
+      toast.error(error.message || 'Failed to load students');
     } finally {
       setLoading(false);
     }
@@ -54,18 +49,13 @@ export function Students() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('students')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await studentController.deleteStudent(id);
 
       setStudents(students.filter(s => s.id !== id));
       toast.success('Student deleted successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting student:', error);
-      toast.error('Failed to delete student');
+      toast.error(error.message || 'Failed to delete student');
     }
   };
 
@@ -73,35 +63,27 @@ export function Students() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     
-    const studentData = {
+    const studentData: StudentCreateInput = {
       name: formData.get('name') as string,
       surname: formData.get('surname') as string,
       email: formData.get('email') as string,
       phone: formData.get('phone') as string,
       parent_name: formData.get('parentName') as string || null,
       parent_phone: formData.get('parentPhone') as string || null,
-      enrolled_courses: editingStudent?.enrolled_courses || [],
-      status: formData.get('status') as 'active' | 'inactive',
+      status: formData.get('status') as StudentStatus,
       join_date: formData.get('enrollmentDate') as string,
     };
 
     try {
       if (editingStudent) {
-        // Update existing student
-        const { error } = await supabase
-          .from('students')
-          .update(studentData)
-          .eq('id', editingStudent.id);
-
-        if (error) throw error;
+        const updatePayload: StudentUpdateInput = {
+          ...studentData,
+          id: editingStudent.id,
+        };
+        await studentController.updateStudent(updatePayload);
         toast.success('Student updated successfully');
       } else {
-        // Add new student
-        const { error } = await supabase
-          .from('students')
-          .insert([studentData]);
-
-        if (error) throw error;
+        await studentController.createStudent(studentData);
         toast.success('Student added successfully');
       }
 

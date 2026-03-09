@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -7,40 +7,67 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { mockHomework, mockGroups, type Homework } from '../lib/mockData';
+import { homeworkController } from '../../mvc/controllers/homeworkController';
+import type { HomeworkCreateInput, HomeworkRecordView } from '../../mvc/models/homeworkModel';
 import { toast } from 'sonner';
 
 export function HomeworkPage() {
-  const [homework, setHomework] = useState<Homework[]>(mockHomework);
+  const [homework, setHomework] = useState<HomeworkRecordView[]>([]);
+  const [courses, setCourses] = useState<Array<{ id: string; name: string; level?: string }>>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [homeworkData, courseData] = await Promise.all([
+        homeworkController.listHomework(),
+        homeworkController.listCourses(),
+      ]);
+      setHomework(homeworkData);
+      setCourses(courseData as Array<{ id: string; name: string; level?: string }>);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load homework');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    
-    const groupId = formData.get('groupId') as string;
-    const group = mockGroups.find(g => g.id === groupId);
 
-    const homeworkData: Homework = {
-      id: String(Date.now()),
+    const payload: HomeworkCreateInput = {
+      course_id: formData.get('course_id') as string,
       title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      groupId,
-      groupName: group?.name || '',
-      teacherId: group?.teacherId || '',
-      teacherName: group?.teacherName || '',
-      dueDate: formData.get('dueDate') as string,
-      assignedDate: new Date().toISOString().split('T')[0],
-      subject: group?.subject || ''
+      description: (formData.get('description') as string) || null,
+      due_date: formData.get('due_date') as string,
+      max_points: Number(formData.get('max_points') || 100),
     };
 
-    setHomework([...homework, homeworkData]);
-    toast.success('Homework assigned successfully');
-    setIsAddDialogOpen(false);
+    try {
+      await homeworkController.createHomework(payload);
+      toast.success('Homework assigned successfully');
+      await loadData();
+      setIsAddDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to assign homework');
+    }
   };
 
   const isOverdue = (dueDate: string) => {
-    return new Date(dueDate) < new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return new Date(dueDate) < today;
+  };
+
+  const stats = {
+    total: homework.length,
+    overdue: homework.filter((hw) => isOverdue(hw.due_date)).length,
+    upcoming: homework.filter((hw) => !isOverdue(hw.due_date)).length,
   };
 
   return (
@@ -71,23 +98,27 @@ export function HomeworkPage() {
                 <Textarea id="description" name="description" required />
               </div>
               <div>
-                <Label htmlFor="groupId">Group</Label>
-                <Select name="groupId" required>
+                <Label htmlFor="course_id">Course</Label>
+                <Select name="course_id" required>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select group" />
+                    <SelectValue placeholder="Select course" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockGroups.map(group => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
+                    {courses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.name} {course.level ? `(${course.level})` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="dueDate">Due Date</Label>
-                <Input id="dueDate" name="dueDate" type="date" required />
+                <Label htmlFor="due_date">Due Date</Label>
+                <Input id="due_date" name="due_date" type="date" required />
+              </div>
+              <div>
+                <Label htmlFor="max_points">Max Points</Label>
+                <Input id="max_points" name="max_points" type="number" min="1" defaultValue="100" required />
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -100,9 +131,31 @@ export function HomeworkPage() {
         </Dialog>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-sm text-slate-600">Total Assignments</p>
+            <p className="text-2xl font-semibold mt-1">{stats.total}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-sm text-slate-600">Upcoming</p>
+            <p className="text-2xl font-semibold mt-1 text-blue-700">{stats.upcoming}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-sm text-slate-600">Overdue</p>
+            <p className="text-2xl font-semibold mt-1 text-red-700">{stats.overdue}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="space-y-4">
-        {homework.map(hw => {
-          const overdue = isOverdue(hw.dueDate);
+        {loading && <Card><CardContent className="p-8 text-center text-slate-500">Loading homework...</CardContent></Card>}
+        {!loading && homework.map((hw) => {
+          const overdue = isOverdue(hw.due_date);
           return (
             <Card key={hw.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
@@ -116,31 +169,24 @@ export function HomeworkPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-slate-600 mb-4">{hw.description}</p>
+                    <p className="text-slate-600 mb-4">{hw.description || 'No description provided.'}</p>
                     <div className="flex items-center gap-6 text-sm text-slate-600">
                       <span className="flex items-center gap-2">
-                        <span className="font-medium">Group:</span>
-                        {hw.groupName}
+                        <span className="font-medium">Course:</span>
+                        {hw.course_name}
                       </span>
-                      <span className="flex items-center gap-2">
-                        <span className="font-medium">Teacher:</span>
-                        {hw.teacherName}
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <span className="font-medium">Subject:</span>
-                        {hw.subject}
-                      </span>
+                      <span className="flex items-center gap-2"><span className="font-medium">Max Points:</span>{hw.max_points}</span>
                     </div>
                   </div>
                   <div className="text-right ml-4">
                     <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
                       <Clock className="size-4" />
-                      <span>Assigned: {hw.assignedDate}</span>
+                      <span>Assigned: {hw.assigned_date}</span>
                     </div>
                     <div className={`px-3 py-1 rounded text-sm ${
                       overdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
                     }`}>
-                      Due: {hw.dueDate}
+                      Due: {hw.due_date}
                     </div>
                   </div>
                 </div>
@@ -149,6 +195,15 @@ export function HomeworkPage() {
           );
         })}
       </div>
+
+      {!loading && homework.length === 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>No Homework Yet</CardTitle>
+          </CardHeader>
+          <CardContent className="text-slate-600">Create your first assignment to get started.</CardContent>
+        </Card>
+      )}
     </div>
   );
 }

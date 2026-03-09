@@ -1,53 +1,82 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Calendar as CalendarIcon, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { mockAttendance, mockGroups, mockStudents, type AttendanceRecord } from '../lib/mockData';
+import { attendanceController } from '../../mvc/controllers/attendanceController';
+import type { AttendanceRecordView, AttendanceStatus } from '../../mvc/models/attendanceModel';
 import { toast } from 'sonner';
 
 export function Attendance() {
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>(mockAttendance);
-  const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  const [courses, setCourses] = useState<Array<{ id: string; name: string; level?: string }>>([]);
+  const [studentsInCourse, setStudentsInCourse] = useState<Array<{ id: string; name: string; surname: string; email?: string }>>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordView[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredAttendance = selectedGroup === 'all'
-    ? attendance
-    : attendance.filter(a => a.groupId === selectedGroup);
+  useEffect(() => {
+    void loadCourses();
+  }, []);
 
-  const group = selectedGroup !== 'all' ? mockGroups.find(g => g.id === selectedGroup) : null;
-  const studentsInGroup = group ? mockStudents.filter(s => group.students.includes(s.id)) : [];
-
-  const markAttendance = (studentId: string, status: 'present' | 'absent' | 'late') => {
-    const existing = attendance.find(a => a.studentId === studentId && a.date === selectedDate);
-    
-    if (existing) {
-      setAttendance(attendance.map(a => 
-        a.id === existing.id ? { ...a, status } : a
-      ));
-    } else {
-      const student = mockStudents.find(s => s.id === studentId);
-      const newRecord: AttendanceRecord = {
-        id: String(Date.now()),
-        studentId,
-        studentName: `${student?.name} ${student?.surname}`,
-        groupId: selectedGroup,
-        date: selectedDate,
-        status
-      };
-      setAttendance([...attendance, newRecord]);
+  useEffect(() => {
+    if (!selectedCourse) {
+      setStudentsInCourse([]);
+      setAttendanceRecords([]);
+      return;
     }
-    toast.success('Attendance marked');
+    void loadCourseData(selectedCourse);
+  }, [selectedCourse]);
+
+  const loadCourses = async () => {
+    try {
+      const data = await attendanceController.listCourses();
+      setCourses(data as Array<{ id: string; name: string; level?: string }>);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load courses');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCourseData = async (courseId: string) => {
+    try {
+      const [students, records] = await Promise.all([
+        attendanceController.listStudentsForCourse(courseId),
+        attendanceController.listRecords(courseId, selectedDate),
+      ]);
+      setStudentsInCourse(students as Array<{ id: string; name: string; surname: string; email?: string }>);
+      setAttendanceRecords(records);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load attendance data');
+    }
+  };
+
+  const markAttendance = async (studentId: string, status: AttendanceStatus) => {
+    if (!selectedCourse) return;
+
+    try {
+      await attendanceController.mark({
+        student_id: studentId,
+        course_id: selectedCourse,
+        date: selectedDate,
+        status,
+      });
+      toast.success('Attendance marked');
+      await loadCourseData(selectedCourse);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to mark attendance');
+    }
   };
 
   const getAttendanceStatus = (studentId: string) => {
-    return attendance.find(a => a.studentId === studentId && a.date === selectedDate);
+    return attendanceRecords.find(a => a.student_id === studentId && a.date === selectedDate);
   };
 
   const stats = {
-    present: attendance.filter(a => a.status === 'present' && a.date === selectedDate).length,
-    absent: attendance.filter(a => a.status === 'absent' && a.date === selectedDate).length,
-    late: attendance.filter(a => a.status === 'late' && a.date === selectedDate).length,
+    present: attendanceRecords.filter(a => a.status === 'present' && a.date === selectedDate).length,
+    absent: attendanceRecords.filter(a => a.status === 'absent' && a.date === selectedDate).length,
+    late: attendanceRecords.filter(a => a.status === 'late' && a.date === selectedDate).length,
   };
 
   return (
@@ -104,15 +133,14 @@ export function Attendance() {
                 <CalendarIcon className="size-4 text-slate-600" />
                 <span className="text-sm text-slate-600">{selectedDate}</span>
               </div>
-              <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+              <Select value={selectedCourse} onValueChange={setSelectedCourse}>
                 <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Select group" />
+                  <SelectValue placeholder="Select course" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Groups</SelectItem>
-                  {mockGroups.map(group => (
-                    <SelectItem key={group.id} value={group.id}>
-                      {group.name}
+                  {courses.map(course => (
+                    <SelectItem key={course.id} value={course.id}>
+                      {course.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -121,9 +149,11 @@ export function Attendance() {
           </div>
         </CardHeader>
         <CardContent>
-          {selectedGroup !== 'all' && studentsInGroup.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-12 text-slate-600">Loading attendance...</div>
+          ) : selectedCourse && studentsInCourse.length > 0 ? (
             <div className="space-y-3">
-              {studentsInGroup.map(student => {
+              {studentsInCourse.map(student => {
                 const attendanceRecord = getAttendanceStatus(student.id);
                 return (
                   <div key={student.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -133,7 +163,7 @@ export function Attendance() {
                       </div>
                       <div>
                         <div className="font-medium">{student.name} {student.surname}</div>
-                        <div className="text-sm text-slate-600">{student.email}</div>
+                        <div className="text-sm text-slate-600">{student.email || 'No email'}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -168,7 +198,7 @@ export function Attendance() {
             </div>
           ) : (
             <div className="text-center py-12 text-slate-600">
-              {selectedGroup === 'all' ? 'Select a group to mark attendance' : 'No students in this group'}
+              {!selectedCourse ? 'Select a course to mark attendance' : 'No active students in this course'}
             </div>
           )}
         </CardContent>
@@ -180,10 +210,10 @@ export function Attendance() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {filteredAttendance.slice(0, 10).map(record => (
+            {attendanceRecords.slice(0, 10).map(record => (
               <div key={record.id} className="flex items-center justify-between p-3 border rounded hover:bg-slate-50">
                 <div>
-                  <div className="font-medium">{record.studentName}</div>
+                  <div className="font-medium">{record.student_name}</div>
                   <div className="text-sm text-slate-600">{record.date}</div>
                 </div>
                 <span className={`px-3 py-1 rounded text-sm ${

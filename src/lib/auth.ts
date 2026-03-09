@@ -134,32 +134,21 @@ export async function signIn(email: string, password: string) {
  * Check if we should use mock mode (when Supabase is not available)
  */
 async function shouldUseMockMode(): Promise<boolean> {
-  // For demo deployment, ALWAYS use mock mode by default
-  // This ensures the app works instantly without database setup
-  
-  // Skip database check entirely - just use mock mode
-  console.log('🎭 Using MOCK mode (demo deployment)');
-  return true;
-  
-  /* Disabled for demo mode - uncomment to enable real Supabase
   try {
-    // Quick check - if no internet or Supabase unavailable, use mock
+    // Prefer real Supabase auth in production; fallback to mock only when backend is unavailable.
     const { error } = await supabase.from('users').select('count').limit(1);
-    
-    // If there's an error about table not existing, use mock mode
+
     if (error) {
       console.log('⚠️ Database not available, using MOCK mode:', error.message);
       return true;
     }
-    
+
     console.log('✅ Database is available, using real auth');
     return false;
   } catch (error) {
-    // Any connection error means use mock mode
     console.log('⚠️ Connection error, using MOCK mode:', error);
     return true;
   }
-  */
 }
 
 /**
@@ -309,14 +298,17 @@ export async function signOut() {
  */
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    // Check for mock session first
-    const mockSession = localStorage.getItem('mock_session');
-    console.log('📦 Mock session in localStorage:', mockSession);
-    
-    if (mockSession) {
-      const user = JSON.parse(mockSession) as User;
-      console.log('✅ Returning mock user:', user);
-      return user;
+    const useMockMode = await shouldUseMockMode();
+
+    if (useMockMode) {
+      const mockSession = localStorage.getItem('mock_session');
+      console.log('📦 Mock session in localStorage:', mockSession);
+
+      if (mockSession) {
+        const user = JSON.parse(mockSession) as User;
+        console.log('✅ Returning mock user:', user);
+        return user;
+      }
     }
     
     console.log('🔍 No mock session, checking Supabase...');

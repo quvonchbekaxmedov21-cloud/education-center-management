@@ -131,9 +131,9 @@ export function TeacherDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.full_name}!</h1>
-        <p className="text-gray-600">Here's an overview of your teaching activities</p>
+      <div className="rounded-2xl border border-white/15 bg-slate-900/45 backdrop-blur px-5 py-4">
+        <h1 className="text-3xl font-bold text-white">Welcome back, {user?.full_name}!</h1>
+        <p className="text-slate-200">Here's an overview of your teaching activities</p>
       </div>
 
       {/* Stats Grid */}

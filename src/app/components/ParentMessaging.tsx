@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Send, MessageSquare, Phone, Mail } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -6,44 +6,76 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
-import { mockStudents } from '../lib/mockData';
+import { messagingController } from '../../mvc/controllers/messagingController';
+import type { MessageChannel, ParentRecipientView, SentMessageView } from '../../mvc/models/messagingModel';
+import { useAuth } from '../../lib/AuthContext';
 import { toast } from 'sonner';
 
 export function ParentMessaging() {
+  const { user } = useAuth();
+  const [recipients, setRecipients] = useState<ParentRecipientView[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'email' | 'sms'>('email');
+  const [messageType, setMessageType] = useState<MessageChannel>('email');
+  const [recentMessages, setRecentMessages] = useState<SentMessageView[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [recipientData, recentData] = await Promise.all([
+        messagingController.listRecipients(),
+        messagingController.listRecent(),
+      ]);
+      setRecipients(recipientData);
+      setRecentMessages(recentData);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load messaging data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleStudent = (studentId: string) => {
-    setSelectedStudents(prev =>
+    setSelectedStudents((prev) =>
       prev.includes(studentId)
-        ? prev.filter(id => id !== studentId)
+        ? prev.filter((id) => id !== studentId)
         : [...prev, studentId]
     );
   };
 
   const toggleAll = () => {
-    if (selectedStudents.length === mockStudents.length) {
+    if (selectedStudents.length === recipients.length) {
       setSelectedStudents([]);
     } else {
-      setSelectedStudents(mockStudents.map(s => s.id));
+      setSelectedStudents(recipients.map((r) => r.student_id));
     }
   };
 
-  const handleSend = () => {
-    if (selectedStudents.length === 0) {
-      toast.error('Please select at least one student');
-      return;
-    }
-    if (!message.trim()) {
-      toast.error('Please enter a message');
+  const handleSend = async () => {
+    if (!user?.email) {
+      toast.error('Unable to identify current user');
       return;
     }
 
-    // In a real app, this would send actual messages
-    toast.success(`Message sent to ${selectedStudents.length} parent(s) via ${messageType}`);
-    setMessage('');
-    setSelectedStudents([]);
+    try {
+      await messagingController.send({
+        sender_email: user.email,
+        student_ids: selectedStudents,
+        channel: messageType,
+        body: message,
+      });
+
+      toast.success(`Message saved and sent to ${selectedStudents.length} parent(s) via ${messageType}`);
+      setMessage('');
+      setSelectedStudents([]);
+      await loadData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send message');
+    }
   };
 
   return (
@@ -58,11 +90,9 @@ export function ParentMessaging() {
           <div className="flex items-start gap-3">
             <MessageSquare className="size-5 text-yellow-700 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-yellow-900 mb-1">SMS Feature Note</h3>
+              <h3 className="font-semibold text-yellow-900 mb-1">Delivery Note</h3>
               <p className="text-sm text-yellow-800">
-                SMS messaging requires integration with a service like Twilio and cannot be implemented purely in the frontend.
-                This interface demonstrates the UI, but actual SMS sending would require backend infrastructure.
-                For now, you can use this to compose and track messages that would be sent.
+                Messages are now persisted in the database. External delivery (actual SMS/email) requires a backend provider integration.
               </p>
             </div>
           </div>
@@ -75,46 +105,46 @@ export function ParentMessaging() {
             <div className="flex items-center justify-between">
               <CardTitle>Select Recipients</CardTitle>
               <Button variant="outline" size="sm" onClick={toggleAll}>
-                {selectedStudents.length === mockStudents.length ? 'Deselect All' : 'Select All'}
+                {selectedStudents.length === recipients.length ? 'Deselect All' : 'Select All'}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3 max-h-[500px] overflow-y-auto">
-              {mockStudents.map(student => (
-                <div key={student.id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-slate-50">
-                  <Checkbox
-                    id={`student-${student.id}`}
-                    checked={selectedStudents.includes(student.id)}
-                    onCheckedChange={() => toggleStudent(student.id)}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor={`student-${student.id}`} className="cursor-pointer">
-                      <div className="font-medium">{student.name} {student.surname}</div>
-                      {student.parentName && (
-                        <div className="text-sm text-slate-600 mt-1">
-                          Parent: {student.parentName}
+            {loading ? (
+              <div className="py-8 text-center text-slate-500">Loading recipients...</div>
+            ) : (
+              <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                {recipients.map((recipient) => (
+                  <div key={recipient.student_id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-slate-50">
+                    <Checkbox
+                      id={`student-${recipient.student_id}`}
+                      checked={selectedStudents.includes(recipient.student_id)}
+                      onCheckedChange={() => toggleStudent(recipient.student_id)}
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor={`student-${recipient.student_id}`} className="cursor-pointer">
+                        <div className="font-medium">{recipient.student_name}</div>
+                        <div className="text-sm text-slate-600 mt-1">Parent: {recipient.parent_name}</div>
+                        <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                          {recipient.parent_email && (
+                            <span className="flex items-center gap-1">
+                              <Mail className="size-3" />
+                              {recipient.parent_email}
+                            </span>
+                          )}
+                          {recipient.parent_phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="size-3" />
+                              {recipient.parent_phone}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
-                        {student.parentEmail && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="size-3" />
-                            {student.parentEmail}
-                          </span>
-                        )}
-                        {student.parentPhone && (
-                          <span className="flex items-center gap-1">
-                            <Phone className="size-3" />
-                            {student.parentPhone}
-                          </span>
-                        )}
-                      </div>
-                    </Label>
+                      </Label>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -125,7 +155,7 @@ export function ParentMessaging() {
           <CardContent className="space-y-4">
             <div>
               <Label>Message Type</Label>
-              <Select value={messageType} onValueChange={(v) => setMessageType(v as 'email' | 'sms')}>
+              <Select value={messageType} onValueChange={(v) => setMessageType(v as MessageChannel)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -139,7 +169,7 @@ export function ParentMessaging() {
                   <SelectItem value="sms">
                     <div className="flex items-center gap-2">
                       <Phone className="size-4" />
-                      SMS (Requires Backend)
+                      SMS
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -149,29 +179,23 @@ export function ParentMessaging() {
             <div>
               <Label>Message</Label>
               <Textarea
-                placeholder={messageType === 'sms' 
-                  ? "Keep SMS messages short and concise (160 characters recommended)"
-                  : "Write your message to parents..."}
+                placeholder={messageType === 'sms'
+                  ? 'Keep SMS messages short and concise (160 characters recommended)'
+                  : 'Write your message to parents...'}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={12}
                 maxLength={messageType === 'sms' ? 160 : undefined}
               />
               {messageType === 'sms' && (
-                <p className="text-sm text-slate-600 mt-1">
-                  {message.length}/160 characters
-                </p>
+                <p className="text-sm text-slate-600 mt-1">{message.length}/160 characters</p>
               )}
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg">
               <h4 className="font-medium mb-2">Message Preview</h4>
-              <div className="text-sm text-slate-600">
-                {selectedStudents.length} recipient(s) selected
-              </div>
-              <div className="text-sm text-slate-600">
-                Method: {messageType === 'email' ? 'Email' : 'SMS'}
-              </div>
+              <div className="text-sm text-slate-600">{selectedStudents.length} recipient(s) selected</div>
+              <div className="text-sm text-slate-600">Method: {messageType === 'email' ? 'Email' : 'SMS'}</div>
             </div>
 
             <Button className="w-full" size="lg" onClick={handleSend}>
@@ -184,50 +208,23 @@ export function ParentMessaging() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Message Templates</CardTitle>
+          <CardTitle>Recent Sent Messages</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              className="h-auto py-4 px-4 text-left justify-start"
-              onClick={() => setMessage("Dear Parent, This is to inform you about your child's excellent progress this week. Keep up the great work!")}
-            >
-              <div>
-                <div className="font-medium mb-1">Progress Update</div>
-                <div className="text-xs text-slate-600">Positive feedback template</div>
+          <div className="space-y-3">
+            {recentMessages.map((item) => (
+              <div key={item.id} className="rounded-lg border p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium uppercase tracking-wide">{item.channel}</span>
+                  <span className="text-xs text-slate-500">{new Date(item.sent_date).toLocaleString()}</span>
+                </div>
+                <p className="text-sm font-medium text-slate-700 mb-1">{item.recipient}</p>
+                <p className="text-sm text-slate-600 line-clamp-2">{item.message}</p>
               </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-auto py-4 px-4 text-left justify-start"
-              onClick={() => setMessage("Dear Parent, This is a reminder that payment for this month is due. Please contact us for any questions.")}
-            >
-              <div>
-                <div className="font-medium mb-1">Payment Reminder</div>
-                <div className="text-xs text-slate-600">Fee reminder template</div>
-              </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-auto py-4 px-4 text-left justify-start"
-              onClick={() => setMessage("Dear Parent, Your child was absent today. Please let us know if everything is okay.")}
-            >
-              <div>
-                <div className="font-medium mb-1">Absence Notice</div>
-                <div className="text-xs text-slate-600">Attendance notification</div>
-              </div>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-auto py-4 px-4 text-left justify-start"
-              onClick={() => setMessage("Dear Parent, We have scheduled a parent-teacher meeting. Please confirm your availability.")}
-            >
-              <div>
-                <div className="font-medium mb-1">Meeting Invitation</div>
-                <div className="text-xs text-slate-600">Schedule meeting template</div>
-              </div>
-            </Button>
+            ))}
+            {!loading && recentMessages.length === 0 && (
+              <div className="py-8 text-center text-slate-500">No message history yet.</div>
+            )}
           </div>
         </CardContent>
       </Card>

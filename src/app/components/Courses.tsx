@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Search, Edit, Trash2, Users, Clock, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -7,55 +7,92 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Progress } from './ui/progress';
-import { mockCourses, type Course } from '../lib/mockData';
+import { courseController } from '../../mvc/controllers/courseController';
+import type {
+  CourseCreateInput,
+  CourseRecordView,
+  CourseStatus,
+  CourseUpdateInput,
+} from '../../mvc/models/courseModel';
 import { toast } from 'sonner';
 
 export function Courses() {
-  const [courses, setCourses] = useState<Course[]>(mockCourses);
+  const [courses, setCourses] = useState<CourseRecordView[]>([]);
+  const [instructors, setInstructors] = useState<Array<{ id: string; name: string; surname: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [editingCourse, setEditingCourse] = useState<CourseRecordView | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [courseData, instructorData] = await Promise.all([
+        courseController.listCourses(),
+        courseController.listInstructors(),
+      ]);
+      setCourses(courseData);
+      setInstructors(instructorData as Array<{ id: string; name: string; surname: string }>);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load courses');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredCourses = courses.filter(course =>
     course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     course.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleDelete = (id: string) => {
-    setCourses(courses.filter(c => c.id !== id));
-    toast.success('Course deleted successfully');
+  const handleDelete = async (id: string) => {
+    try {
+      await courseController.deleteCourse(id);
+      setCourses(courses.filter(c => c.id !== id));
+      toast.success('Course deleted successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete course');
+    }
   };
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    
-    const courseData: Course = {
-      id: editingCourse?.id || String(Date.now()),
+
+    const payload: CourseCreateInput = {
       name: formData.get('name') as string,
       code: formData.get('code') as string,
-      instructor: formData.get('instructor') as string,
-      schedule: formData.get('schedule') as string,
+      instructor_id: (formData.get('instructor_id') as string) || null,
+      schedule: (formData.get('schedule') as string) || null,
+      duration: (formData.get('duration') as string) || null,
       capacity: Number(formData.get('capacity')),
-      enrolled: editingCourse?.enrolled || 0,
-      duration: formData.get('duration') as string,
       price: Number(formData.get('price')),
-      status: formData.get('status') as 'active' | 'completed' | 'upcoming'
+      status: formData.get('status') as CourseStatus,
+      level: (formData.get('level') as string) || null,
     };
 
-    if (editingCourse) {
-      setCourses(courses.map(c => c.id === editingCourse.id ? courseData : c));
-      toast.success('Course updated successfully');
-    } else {
-      setCourses([...courses, courseData]);
-      toast.success('Course added successfully');
-    }
+    try {
+      if (editingCourse) {
+        const updatePayload: CourseUpdateInput = { ...payload, id: editingCourse.id };
+        await courseController.updateCourse(updatePayload);
+        toast.success('Course updated successfully');
+      } else {
+        await courseController.createCourse(payload);
+        toast.success('Course added successfully');
+      }
 
-    setIsAddDialogOpen(false);
-    setEditingCourse(null);
+      await loadData();
+      setIsAddDialogOpen(false);
+      setEditingCourse(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save course');
+    }
   };
 
-  const CourseForm = ({ course }: { course?: Course | null }) => (
+  const CourseForm = ({ course }: { course?: CourseRecordView | null }) => (
     <form onSubmit={handleSave} className="space-y-4">
       <div>
         <Label htmlFor="name">Course Name</Label>
@@ -66,12 +103,23 @@ export function Courses() {
         <Input id="code" name="code" defaultValue={course?.code} required />
       </div>
       <div>
-        <Label htmlFor="instructor">Instructor</Label>
-        <Input id="instructor" name="instructor" defaultValue={course?.instructor} required />
+        <Label htmlFor="instructor_id">Instructor</Label>
+        <Select name="instructor_id" defaultValue={course?.instructor_id || undefined}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select instructor" />
+          </SelectTrigger>
+          <SelectContent>
+            {instructors.map((instructor) => (
+              <SelectItem key={instructor.id} value={instructor.id}>
+                {instructor.name} {instructor.surname}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <Label htmlFor="schedule">Schedule</Label>
-        <Input id="schedule" name="schedule" defaultValue={course?.schedule} placeholder="e.g., Mon, Wed 10:00 AM" required />
+        <Input id="schedule" name="schedule" defaultValue={course?.schedule || ''} placeholder="e.g., Mon, Wed 10:00 AM" />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -86,6 +134,10 @@ export function Courses() {
       <div>
         <Label htmlFor="duration">Duration</Label>
         <Input id="duration" name="duration" defaultValue={course?.duration} placeholder="e.g., 12 weeks" required />
+      </div>
+      <div>
+        <Label htmlFor="level">Level</Label>
+        <Input id="level" name="level" defaultValue={course?.level || ''} placeholder="beginner/intermediate/advanced" />
       </div>
       <div>
         <Label htmlFor="status">Status</Label>
@@ -161,9 +213,12 @@ export function Courses() {
           </div>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="py-12 text-center text-slate-500">Loading courses...</div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredCourses.map((course) => {
-              const enrollmentPercentage = (course.enrolled / course.capacity) * 100;
+              const enrollmentPercentage = course.capacity > 0 ? (course.enrolled / course.capacity) * 100 : 0;
               return (
                 <Card key={course.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-6">
@@ -180,11 +235,11 @@ export function Courses() {
                     <div className="space-y-3 mb-4">
                       <div className="flex items-center gap-2 text-sm text-slate-600">
                         <Users className="size-4" />
-                        <span>Instructor: {course.instructor}</span>
+                        <span>Instructor: {course.instructor_name}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-slate-600">
                         <Clock className="size-4" />
-                        <span>{course.schedule}</span>
+                        <span>{course.schedule || 'Schedule TBA'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-slate-600">
                         <DollarSign className="size-4" />
@@ -233,6 +288,7 @@ export function Courses() {
               );
             })}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -113,9 +113,9 @@ export function ParentDashboard() {
   if (children.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome, {user?.full_name}!</h1>
-          <p className="text-gray-600">Parent Portal Dashboard</p>
+        <div className="rounded-2xl border border-white/15 bg-slate-900/45 backdrop-blur px-5 py-4">
+          <h1 className="text-3xl font-bold text-white">Welcome, {user?.full_name}!</h1>
+          <p className="text-slate-200">Parent Portal Dashboard</p>
         </div>
 
         <Card>
@@ -134,9 +134,9 @@ export function ParentDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Welcome, {user?.full_name}!</h1>
-        <p className="text-gray-600">Monitor your {children.length === 1 ? "child's" : "children's"} academic progress</p>
+      <div className="rounded-2xl border border-white/15 bg-slate-900/45 backdrop-blur px-5 py-4">
+        <h1 className="text-3xl font-bold text-white">Welcome, {user?.full_name}!</h1>
+        <p className="text-slate-200">Monitor your {children.length === 1 ? "child's" : "children's"} academic progress</p>
       </div>
 
       {children.map((child) => (
